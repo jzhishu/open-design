@@ -35,6 +35,10 @@ const EMPTY_DESIGN_SYSTEMS: DesignSystemSummary[] = [];
 
 const DECK_PREVIEW_WIDTH = 1280;
 const DECK_PREVIEW_HEIGHT = 720;
+const DEFAULT_RECENT_PROJECT_LIMIT = 6;
+const WIDE_RECENT_PROJECT_LIMIT = 7;
+// 7 * 180px cards + 6 * 12px gaps, matching recent-projects.css.
+const WIDE_RECENT_PROJECT_MIN_ROW_WIDTH = 1332;
 const deckCoverCache = new Map<string, string>();
 const deckCoverInflight = new Map<string, Promise<string>>();
 
@@ -45,14 +49,44 @@ export function RecentProjectsStrip({
   onViewAll,
   onDelete,
   onRename,
-  limit = 6,
+  limit,
 }: Props) {
   const t = useT();
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const [responsiveLimit, setResponsiveLimit] = useState(DEFAULT_RECENT_PROJECT_LIMIT);
+  const resolvedLimit = limit ?? responsiveLimit;
+
+  useEffect(() => {
+    if (limit !== undefined) return;
+
+    const node = rowRef.current;
+    const update = () => {
+      const rowWidth =
+        node?.getBoundingClientRect().width ??
+        (typeof window === 'undefined' ? 0 : window.innerWidth);
+      setResponsiveLimit(
+        rowWidth >= WIDE_RECENT_PROJECT_MIN_ROW_WIDTH
+          ? WIDE_RECENT_PROJECT_LIMIT
+          : DEFAULT_RECENT_PROJECT_LIMIT,
+      );
+    };
+
+    update();
+    if (node && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(update);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [limit]);
+
   const recent = useMemo(
     () => [...projects]
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, limit),
-    [projects, limit],
+      .slice(0, resolvedLimit),
+    [projects, resolvedLimit],
   );
   const [coverByProject, setCoverByProject] = useState<
     Record<string, { kind: 'html' | 'image' | 'video' | 'logo'; name: string } | null>
@@ -201,6 +235,7 @@ export function RecentProjectsStrip({
         </button>
       </header>
       <div
+        ref={rowRef}
         className={`recent-projects__row${menuOpenId ? ' recent-projects__row--menu-open' : ''}`}
         role="list"
       >
