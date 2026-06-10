@@ -550,7 +550,6 @@ export function InlineModelSwitcher({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${chipMode} · ${chipPrimary} · ${chipModel}`}
-        title={`${chipMode} · ${chipPrimary} · ${chipModel}`}
         data-tooltip={`${chipMode} · ${chipPrimary} · ${chipModel}`}
       >
         {showAmrReminder ? (
