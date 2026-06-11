@@ -5133,14 +5133,15 @@ describe('LiveArtifactViewer', () => {
     expect(rule).toContain('display: none;');
   });
 
-  it('keeps the presentation exit button aligned with preview chrome spacing', () => {
+  it('keeps the presentation exit button compact and aligned with preview chrome spacing', () => {
     const css = readExpandedIndexCss();
     const rule = css.match(/\.present-exit\s*\{[^}]+\}/)?.[0] ?? '';
 
-    expect(rule).toContain('top: calc(env(safe-area-inset-top, 0px) + 20px);');
-    expect(rule).toContain('right: calc(env(safe-area-inset-right, 0px) + 20px);');
+    expect(rule).toContain('top: calc(env(safe-area-inset-top, 0px) + 12px);');
+    expect(rule).toContain('right: calc(env(safe-area-inset-right, 0px) + 12px);');
     expect(rule).toContain('display: inline-flex;');
     expect(rule).toContain('align-items: center;');
+    expect(rule).toContain('border-radius: var(--radius-pill);');
   });
 
   it('keeps in-tab presentation overlays anchored to the inherited workspace tab height', () => {
