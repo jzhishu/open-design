@@ -55,15 +55,17 @@ export function RecentProjectsStrip({
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [responsiveLimit, setResponsiveLimit] = useState(DEFAULT_RECENT_PROJECT_LIMIT);
   const resolvedLimit = limit ?? responsiveLimit;
+  const hasRecentProjects = projects.length > 0;
 
   useEffect(() => {
     if (limit !== undefined) return;
 
-    const node = rowRef.current;
     const update = () => {
-      const rowWidth =
-        node?.getBoundingClientRect().width ??
-        (typeof window === 'undefined' ? 0 : window.innerWidth);
+      const rowWidth = rowRef.current?.getBoundingClientRect().width;
+      if (rowWidth === undefined) {
+        setResponsiveLimit(DEFAULT_RECENT_PROJECT_LIMIT);
+        return;
+      }
       setResponsiveLimit(
         rowWidth >= WIDE_RECENT_PROJECT_MIN_ROW_WIDTH
           ? WIDE_RECENT_PROJECT_LIMIT
@@ -72,15 +74,18 @@ export function RecentProjectsStrip({
     };
 
     update();
+    const node = rowRef.current;
     if (node && typeof ResizeObserver !== 'undefined') {
       const observer = new ResizeObserver(update);
       observer.observe(node);
       return () => observer.disconnect();
     }
 
+    if (typeof window === 'undefined') return;
+
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
-  }, [limit]);
+  }, [hasRecentProjects, limit]);
 
   const recent = useMemo(
     () => [...projects]

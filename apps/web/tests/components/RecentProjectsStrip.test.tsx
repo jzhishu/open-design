@@ -133,6 +133,45 @@ describe('RecentProjectsStrip', () => {
     expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(6);
   });
 
+  it('remeasures when projects arrive after the initial empty render', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1400,
+    });
+
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function getRect(this: HTMLElement) {
+      return {
+        x: 0,
+        y: 0,
+        width: this.classList.contains('recent-projects__row') ? 1331 : 180,
+        height: 100,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        toJSON: () => ({}),
+      };
+    });
+
+    const { container, rerender } = render(
+      <RecentProjectsStrip
+        projects={[]}
+        onOpen={() => {}}
+        onViewAll={() => {}}
+      />,
+    );
+
+    rerender(
+      <RecentProjectsStrip
+        projects={projects(8)}
+        onOpen={() => {}}
+        onViewAll={() => {}}
+      />,
+    );
+
+    expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(6);
+  });
+
   it('matches project cards with previews and design-system tags', async () => {
     const { container } = render(
       <RecentProjectsStrip
