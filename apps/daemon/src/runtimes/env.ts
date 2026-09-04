@@ -200,6 +200,7 @@ export function spawnEnvForAgent(
 }
 
 export function openDesignAmrRunAttempt(input: {
+  cumulativeRetryAttemptCount?: number | null;
   retryAttemptCount?: number | null;
   manualResumeAttemptCount?: number | null;
 }): number {
@@ -208,6 +209,7 @@ export function openDesignAmrRunAttempt(input: {
       ? Math.floor(value)
       : 0;
   return (
+    normalizedCount(input.cumulativeRetryAttemptCount) +
     normalizedCount(input.retryAttemptCount) +
     normalizedCount(input.manualResumeAttemptCount)
   );
