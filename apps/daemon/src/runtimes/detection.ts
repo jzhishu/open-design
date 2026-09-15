@@ -54,10 +54,12 @@ export interface DetectedRuntimeVersions {
 }
 
 // Detection already pays the bounded `--version` probe cost used by Settings.
-// Keep the result as daemon-lifetime provenance so run telemetry can name the
-// exact executable family without spawning another process on every turn.
+// Keep known versions as daemon-lifetime provenance. Missing versions expire
+// so a transient probe failure cannot permanently disable version-gated features.
 const detectedRuntimeVersions = new Map<string, DetectedRuntimeVersions>();
 const detectedRuntimeVersionScopes = new Map<string, string>();
+const missingRuntimeVersionRetryAt = new Map<string, number>();
+const MISSING_RUNTIME_VERSION_TTL_MS = 5_000;
 const detectedRuntimeVersionProbes = new Map<
   string,
   Promise<DetectedRuntimeVersions | null>
@@ -73,6 +75,13 @@ const detectedRuntimeCapabilityProbes = new Map<
 // case stops at the first candidate, so this only bounds the pathological
 // shape: the same CLI name shadowed in many search directories at once.
 const MAX_EXECUTABLE_ATTEMPTS = 8;
+
+function rememberRuntimeVersions(agentId: string, scope: string, versions: DetectedRuntimeVersions): void {
+  detectedRuntimeVersions.set(agentId, versions);
+  detectedRuntimeVersionScopes.set(agentId, scope);
+  if (versions.agentCliVersion) missingRuntimeVersionRetryAt.delete(agentId);
+  else missingRuntimeVersionRetryAt.set(agentId, Date.now() + MISSING_RUNTIME_VERSION_TTL_MS);
+}
 
 export function getDetectedRuntimeVersions(
   agentId: string | null | undefined,
@@ -105,6 +114,7 @@ export async function ensureDetectedRuntimeVersions(
   if (
     remembered
     && detectedRuntimeVersionScopes.get(agentId) === context.scope
+    && (remembered.agentCliVersion || Date.now() < (missingRuntimeVersionRetryAt.get(agentId) ?? 0))
   ) {
     return remembered;
   }
@@ -448,8 +458,7 @@ async function probeRuntimeVersionsOnly(
         }
       : {}),
   };
-  detectedRuntimeVersions.set(def.id, versions);
-  detectedRuntimeVersionScopes.set(def.id, context.scope);
+  rememberRuntimeVersions(def.id, context.scope, versions);
   return { ...versions };
 }
 
@@ -562,6 +571,7 @@ async function probe(
   options: AgentExecutableResolutionOptions = {},
 ): Promise<DetectedAgent> {
   detectedRuntimeVersions.delete(def.id);
+  missingRuntimeVersionRetryAt.delete(def.id);
   // Forget what a previous pass proved unusable before re-probing: a rescan
   // after the user repairs or reinstalls a CLI must not keep skipping it.
   forgetUnusableExecutables(def.id);
@@ -776,10 +786,10 @@ async function probe(
       : {}),
   };
   if (Object.keys(runtimeVersions).length > 0) {
-    detectedRuntimeVersions.set(def.id, runtimeVersions);
-    detectedRuntimeVersionScopes.set(
+    rememberRuntimeVersions(
       def.id,
       runtimeVersionProbeContext(def, configuredEnv)?.scope ?? '',
+      runtimeVersions,
     );
   }
   return {
