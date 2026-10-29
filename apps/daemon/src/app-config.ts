@@ -23,6 +23,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import path from 'node:path';
 import type { OdNextRolloutMode } from '@open-design/contracts';
 
+import { amrSettingsBindingConflict } from './integrations/amr-endpoint-binding.js';
 import { expandHomePrefix } from './home-expansion.js';
 
 import {
@@ -756,6 +757,38 @@ function applyTelemetryDefaults(prefs: AppConfigPrefs): AppConfigPrefs {
   return prefs;
 }
 
+export type MetricsConsentRead = {
+  status: 'missing' | 'available' | 'unavailable';
+  metrics: boolean;
+};
+
+/** Unlike general config hydration, consent must distinguish a fresh install
+ * from damaged/unreadable saved preferences. Never recover a lost opt-out by
+ * silently defaulting a corrupt file to an empty config. */
+export async function readMetricsConsent(dataDir: string): Promise<MetricsConsentRead> {
+  try {
+    const raw: unknown = JSON.parse(await readFile(configFile(dataDir), 'utf8'));
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return { status: 'unavailable', metrics: false };
+    }
+    const telemetry = (raw as Record<string, unknown>).telemetry;
+    if (telemetry !== undefined) {
+      if (!telemetry || typeof telemetry !== 'object' || Array.isArray(telemetry)) {
+        return { status: 'unavailable', metrics: false };
+      }
+      const metrics = (telemetry as Record<string, unknown>).metrics;
+      if (typeof metrics !== 'boolean') return { status: 'unavailable', metrics: false };
+      return { status: 'available', metrics };
+    }
+    return { status: 'available', metrics: applyTelemetryDefaults({}).telemetry?.metrics === true };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { status: 'missing', metrics: applyTelemetryDefaults({}).telemetry?.metrics === true };
+    }
+    return { status: 'unavailable', metrics: false };
+  }
+}
+
 export async function readAppConfig(dataDir: string): Promise<AppConfigPrefs> {
   const base = await readAppConfigFileOnly(dataDir);
   // Channel-root installation file is the new authoritative source for the
@@ -919,6 +952,9 @@ async function doWrite(
   partial: Record<string, unknown>,
 ): Promise<AppConfigPrefs> {
   assertWritableControlValues(partial);
+  if (amrSettingsBindingConflict(partial.agentCliEnv)) {
+    throw new InvalidAppConfigValueError('agentCliEnv', 'AMR environment binding cannot be overridden by CLI settings');
+  }
   const existing = await readAppConfig(dataDir);
   const next: Record<string, unknown> = { ...existing };
   for (const key of Object.keys(partial)) {
